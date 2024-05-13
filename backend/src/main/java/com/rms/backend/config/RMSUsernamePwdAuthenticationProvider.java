@@ -32,12 +32,12 @@ public class RMSUsernamePwdAuthenticationProvider implements AuthenticationProvi
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
         String username = authentication.getName();
         String pwd = authentication.getCredentials().toString();
-        List<Users> users = userRepository.findByEmail(username);
-        if (users.size() > 0) {
-            if (passwordEncoder.matches(pwd, users.get(0).getPwd())) {
+        Users user = userRepository.findByEmail(username);
+        if (user != null) {
+            if (passwordEncoder.matches(pwd, user.getPwd())) {
                 List<GrantedAuthority> authorities = new ArrayList<>();
-                authorities.add(new SimpleGrantedAuthority(users.get(0).getRole()));
-                return new UsernamePasswordAuthenticationToken(username, pwd, getGrantedAuthorities(users.get(0).getAuthorities()));
+                authorities.add(new SimpleGrantedAuthority(user.getRole()));
+                return new UsernamePasswordAuthenticationToken(username, pwd, getGrantedAuthorities(user.getAuthorities()));
             } else {
                 throw new BadCredentialsException("Invalid password!");
             }

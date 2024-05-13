@@ -1,5 +1,9 @@
 package com.rms.backend.controller;
 
+import com.rms.backend.errors.BadRequest;
+import com.rms.backend.errors.GeneralException;
+import com.rms.backend.errors.NotFound;
+import com.rms.backend.errors.Unauthorized;
 import com.rms.backend.model.Users;
 import com.rms.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,10 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.sql.Date;
 import java.util.List;
@@ -27,34 +28,45 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<String> registerUser(@RequestBody Users user) {
-        Users savedUser = null;
-        ResponseEntity response = null;
-        try {
-            String hashPwd = passwordEncoder.encode(user.getPwd());
-            user.setCreatedAt(String.valueOf(new Date(System.currentTimeMillis())));
-            user.setPwd(hashPwd);
-            savedUser = userRepository.save(user);
-            if (savedUser.getId() > 0) {
-                response = ResponseEntity
-                        .status(HttpStatus.CREATED)
-                        .body("Given user details are successfully registered");
-            }
-        } catch (Exception ex) {
-            response = ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("An exception occured due to " + ex.getMessage());
+        Users existingUser = userRepository.findByEmail(user.getEmail());
+        if (existingUser != null) {
+            // User with the same email already exists
+            throw new BadRequest("User with this email already exists");
         }
-        return response;
+
+        // Set created timestamp
+        user.setCreatedAt(String.valueOf(new Date(System.currentTimeMillis())));
+
+        // Hash password
+        String hashedPassword = passwordEncoder.encode(user.getPwd());
+        user.setPwd(hashedPassword);
+
+        // Save user
+        Users savedUser = userRepository.save(user);
+
+        // Check if user saved successfully
+        if (savedUser != null && savedUser.getId() > 0) {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body("User registered successfully");
+        } else {
+            throw new GeneralException("Failed to register user");
+        }
     }
 
-    @RequestMapping("/user")
-    public Users getUserDetailsAfterLogin(Authentication authentication) {
-        List<Users> users = userRepository.findByEmail(authentication.getName());
-        if (users.size() > 0) {
-            return users.get(0);
-        } else {
-            return null;
+    @GetMapping("/user")
+    public ResponseEntity<?>  getUserDetailsAfterLogin(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new Unauthorized("No authentication detected");
         }
 
+        // Get user details by email
+        Users user = userRepository.findByEmail(authentication.getName());
+        if (user != null) {
+            // User found, return user details
+            return ResponseEntity.ok(user);
+        } else {
+            // User not found
+            throw new NotFound("User details not found");
+        }
     }
 }
